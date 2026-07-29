@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>private e2ee chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============ AUTH SCREEN ============ -->
+  <div id="auth-screen">
+    <div class="auth-box">
+      <h1>private chat</h1>
+      <p class="subtitle">end-to-end encrypted · 24h auto-destroy</p>
+      <form id="auth-form">
+        <input type="email" id="email" placeholder="email" required>
+        <input type="password" id="password" placeholder="password" required>
+        <div class="auth-actions">
+          <button type="submit" id="auth-btn">sign in</button>
+          <button type="button" id="toggle-auth-btn">create account</button>
+        </div>
+        <p id="auth-error" class="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ CHAT BUBBLE (widget) ============ -->
+  <div id="chat-bubble" class="hidden">💬</div>
+
+  <!-- ============ CHAT WINDOW (flotante) ============ -->
+  <div id="chat-window" class="hidden">
+    <div id="chat-header">
+      <span id="chat-title">private chat</span>
+      <span id="chat-ttl"></span>
+      <button id="close-chat-btn">_</button>
+    </div>
+
+    <!-- Conversaciones -->
+    <div id="conversations-panel">
+      <div id="conversations-list"></div>
+      <div id="new-conversation">
+        <input type="email" id="new-partner-email" placeholder="other email">
+        <input type="password" id="new-secret" placeholder="shared secret">
+        <button id="start-conversation-btn">start</button>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages-panel" class="hidden">
+      <div id="messages-header">
+        <button id="back-btn">←</button>
+        <span id="messages-partner"></span>
+      </div>
+      <div id="messages-list"></div>
+      <div id="message-input-area">
+        <input type="text" id="message-input" placeholder="type a message..." disabled>
+        <button id="send-btn" disabled>send</button>
+      </div>
+    </div>
+
+    <div id="chat-footer">
+      <span id="user-email-display"></span>
+      <button id="logout-btn">logout</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
