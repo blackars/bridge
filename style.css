@@ -114,6 +114,8 @@ button:hover { background: var(--accent-hover); }
 }
 #close-chat-btn:hover { color: var(--danger); }
 
+#chat-error { font-size: 13px; text-align: center; padding: 10px 16px; margin: 0; }
+
 #messages-list {
   flex: 1;
   overflow-y: auto;

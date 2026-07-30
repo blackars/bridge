@@ -19,32 +19,49 @@ const messagesList = $('messages-list');
 const messageInput = $('message-input');
 const sendBtn = $('send-btn');
 const chatTtl = $('chat-ttl');
+const chatError = $('chat-error');
 
 // ============ AUTH ============
 authForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   authError.textContent = '';
+  authForm.querySelector('button').disabled = true;
   const { error } = await _sb.auth.signInWithPassword({
     email: emailInput.value.trim(),
     password: passwordInput.value
   });
-  if (error) authError.textContent = error.message;
+  if (error) {
+    authError.textContent = error.message;
+    authForm.querySelector('button').disabled = false;
+  }
 });
 
-_sb.auth.onAuthStateChange((event, session) => {
+let _initLock = false;
+_sb.auth.onAuthStateChange(async (event, session) => {
   if (session?.user) {
+    if (_initLock) return;
+    _initLock = true;
     _user = session.user;
-    authScreen.classList.add('hidden');
-    chatWindow.classList.remove('hidden');
-    initChat().catch(err => {
+    authError.textContent = 'loading...';
+    try {
+      await initChat();
+      authScreen.classList.add('hidden');
+      chatWindow.classList.remove('hidden');
+    } catch (err) {
       console.error(err);
-      authError.textContent = err.message;
-    });
+      authError.textContent = '✗ ' + err.message;
+      authForm.querySelector('button').disabled = false;
+      _user = null;
+      _initLock = false;
+    }
   } else {
     cleanup();
     _user = null;
+    _initLock = false;
     chatWindow.classList.add('hidden');
     authScreen.classList.remove('hidden');
+    authError.textContent = '';
+    authForm.querySelector('button').disabled = false;
   }
 });
 
