@@ -169,10 +169,10 @@ INSERT INTO auth.users (
 -- PASO 5: VERIFICAR
 -- ════════════════════════════════════════════
 
-SELECT 'USUARIOS CREADOS:' as "";
+SELECT 'USUARIOS CREADOS:' as titulo;
 SELECT id, email FROM auth.users;
 
-SELECT 'PROFILES CREADOS:' as "";
+SELECT 'PROFILES CREADOS:' as titulo;
 SELECT id, email FROM profiles;
 
 -- Si profiles está vacío, corre esto manualmente:
