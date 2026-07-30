@@ -24,20 +24,25 @@ const chatTtl = $('chat-ttl');
 authForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   authError.textContent = '';
-  const email = emailInput.value.trim();
-  const password = passwordInput.value;
-  const { error } = await _sb.auth.signInWithPassword({ email, password });
+  const { error } = await _sb.auth.signInWithPassword({
+    email: emailInput.value.trim(),
+    password: passwordInput.value
+  });
   if (error) authError.textContent = error.message;
 });
 
-_sb.auth.onAuthStateChange(async (event, session) => {
+_sb.auth.onAuthStateChange((event, session) => {
   if (session?.user) {
     _user = session.user;
     authScreen.classList.add('hidden');
     chatWindow.classList.remove('hidden');
-    await initChat();
+    initChat().catch(err => {
+      console.error(err);
+      authError.textContent = err.message;
+    });
   } else {
     cleanup();
+    _user = null;
     chatWindow.classList.add('hidden');
     authScreen.classList.remove('hidden');
   }
@@ -45,19 +50,19 @@ _sb.auth.onAuthStateChange(async (event, session) => {
 
 closeChat.addEventListener('click', () => _sb.auth.signOut());
 
-// ============ CHAT AUTO ============
+// ============ CHAT ============
 async function initChat() {
   const partner = await getPartner();
-  if (!partner) { authError.textContent = 'no other user found'; return; }
+  if (!partner) throw new Error('other user not found in profiles');
 
   const conv = await findOrCreateConv(partner);
-  if (!conv) return;
+  if (!conv) throw new Error('could not create conversation');
 
   _currentConv = { id: conv.id, partner };
   _secretKey = await deriveKey(CHAT_SECRET, conv.id);
 
   updateTtl(conv.expires_at);
-  if (_ttlInterval) clearInterval(_ttlInterval);
+  clearInterval(_ttlInterval);
   _ttlInterval = setInterval(() => updateTtl(conv.expires_at), 10000);
 
   await loadMessages(conv.id);
@@ -74,15 +79,16 @@ async function getPartner() {
     .select('email')
     .neq('id', _user.id)
     .limit(1);
-  if (error || !data || data.length === 0) return null;
-  return data[0].email;
+  if (error) throw error;
+  if (data && data.length > 0) return data[0].email;
+  return null;
 }
 
 async function findOrCreateConv(partnerEmail) {
   const { data: existing } = await _sb
     .from('conversations')
     .select('*')
-    .or(`and(user1_id.eq.${_user.id},user2_email.eq.${partnerEmail}),and(user1_id.neq.${_user.id},user2_email.eq.${_user.email})`)
+    .or(`user1_id.eq.${_user.id},user2_email.eq.${_user.email}`)
     .limit(1);
 
   if (existing && existing.length > 0) return existing[0];
@@ -93,7 +99,7 @@ async function findOrCreateConv(partnerEmail) {
     .select()
     .single();
 
-  if (error) { console.error(error); return null; }
+  if (error) throw error;
   return created;
 }
 
@@ -106,7 +112,7 @@ async function loadMessages(convId) {
     .gte('created_at', new Date(Date.now() - 86400000).toISOString())
     .order('created_at', { ascending: true });
 
-  if (error) return;
+  if (error) throw error;
   for (const msg of (data || [])) await renderMessage(msg);
   scrollToBottom();
 }
@@ -148,16 +154,16 @@ async function sendMessage() {
     conversation_id: _currentConv.id,
     sender_id: _user.id,
     encrypted_content: encrypted,
-    iv: iv
+    iv
   });
-  if (error) return;
+  if (error) { console.error(error); return; }
   messageInput.value = '';
 }
 
 // ============ TTL ============
 function updateTtl(expiresAt) {
   const ms = new Date(expiresAt) - new Date();
-  if (ms <= 0) { chatTtl.textContent = 'expired'; cleanup(); return; }
+  if (ms <= 0) { chatTtl.textContent = 'expired'; return; }
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const s = Math.floor((ms % 60000) / 1000);
@@ -170,7 +176,8 @@ function cleanup() {
   messageInput.disabled = true;
   sendBtn.disabled = true;
   if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
-  if (_ttlInterval) { clearInterval(_ttlInterval); _ttlInterval = null; }
+  clearInterval(_ttlInterval);
+  _ttlInterval = null;
 }
 
 // ============ E2EE ============
@@ -188,8 +195,7 @@ async function deriveKey(secret, salt) {
 
 async function encrypt(text) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(text);
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, _secretKey, encoded);
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, _secretKey, new TextEncoder().encode(text));
   return {
     encrypted: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
     iv: btoa(String.fromCharCode(...iv))

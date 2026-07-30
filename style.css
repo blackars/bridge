@@ -8,9 +8,23 @@
   --muted: #666;
   --accent: #4f9cf7;
   --accent-hover: #3a7bd5;
+  --msg-other: #1a1a1a;
   --danger: #f74f4f;
   --radius: 12px;
   --radius-sm: 8px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f0f0;
+    --surface: #ffffff;
+    --border: #d0d0d0;
+    --text: #1a1a1a;
+    --muted: #999;
+    --accent: #3a7bd5;
+    --accent-hover: #2d66c2;
+    --msg-other: #e8e8e8;
+  }
 }
 
 body {
@@ -84,10 +98,10 @@ button:hover { background: var(--accent-hover); }
 #chat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  font-weight: 600;
 }
 
 #chat-ttl { font-size: 11px; color: var(--muted); font-weight: 400; }
@@ -124,7 +138,7 @@ button:hover { background: var(--accent-hover); }
 }
 .msg.other {
   align-self: flex-start;
-  background: var(--surface);
+  background: var(--msg-other);
   border: 1px solid var(--border);
 }
 .msg .time { font-size: 10px; opacity: .6; margin-top: 4px; }
@@ -138,4 +152,8 @@ button:hover { background: var(--accent-hover); }
 
 #message-input { flex: 1; }
 
-#send-btn { font-size: 13px; padding: 10px 20px; }
+#send-btn {
+  font-size: 20px;
+  padding: 10px 18px;
+  line-height: 1;
+}
