@@ -4,7 +4,7 @@
  // ============================================
 
 const { createClient } = supabase;
-const _sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const _sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 // --- state ---
 let _user = null;
