@@ -19,7 +19,6 @@ const $ = id => document.getElementById(id);
 const authScreen = $('auth-screen');
 const authForm = $('auth-form');
 const authBtn = $('auth-btn');
-const toggleAuth = $('toggle-auth-btn');
 const authError = $('auth-error');
 const emailInput = $('email');
 const passwordInput = $('password');
@@ -41,31 +40,17 @@ const logoutBtn = $('logout-btn');
 const chatTtl = $('chat-ttl');
 const chatTitle = $('chat-title');
 
-let isLogin = true;
-
 // ============================================
-// AUTH
+// AUTH — solo login (cuentas creadas manualmente)
  // ============================================
-toggleAuth.addEventListener('click', () => {
-  isLogin = !isLogin;
-  authBtn.textContent = isLogin ? 'sign in' : 'create account';
-  toggleAuth.textContent = isLogin ? 'create account' : 'sign in';
-  authError.textContent = '';
-});
-
 authForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   authError.textContent = '';
   const email = emailInput.value.trim();
   const password = passwordInput.value;
   try {
-    const fn = isLogin ? _sb.auth.signInWithPassword : _sb.auth.signUp;
-    const { data, error } = await fn({ email, password });
+    const { error } = await _sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    if (!isLogin && data.user) {
-      authError.textContent = 'check your email to confirm';
-      return;
-    }
   } catch (err) {
     authError.textContent = err.message;
   }
