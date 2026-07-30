@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "users can read own profile" ON profiles;
-CREATE POLICY "users can read own profile"
+DROP POLICY IF EXISTS "users can read profiles" ON profiles;
+CREATE POLICY "users can read profiles"
   ON profiles FOR SELECT
-  USING (auth.uid() = id);
+  USING (auth.role() = 'authenticated');
 
 DROP POLICY IF EXISTS "users can insert own profile" ON profiles;
 CREATE POLICY "users can insert own profile"
