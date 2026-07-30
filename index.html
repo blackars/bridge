@@ -8,58 +8,30 @@
 </head>
 <body>
 
-  <!-- ============ AUTH SCREEN ============ -->
+  <!-- ============ AUTH ============ -->
   <div id="auth-screen">
     <div class="auth-box">
       <h1>:* *:</h1>
       <form id="auth-form">
         <input type="email" id="email" placeholder="email" required>
         <input type="password" id="password" placeholder="password" required>
-        <div class="auth-actions">
-          <button type="submit" id="auth-btn">sign in</button>
-        </div>
+        <button type="submit" id="auth-btn">sign in</button>
         <p id="auth-error" class="error"></p>
       </form>
     </div>
   </div>
 
-  <!-- ============ CHAT BUBBLE (widget) ============ -->
-  <div id="chat-bubble" class="hidden">💬</div>
-
-  <!-- ============ CHAT WINDOW (flotante) ============ -->
+  <!-- ============ CHAT ============ -->
   <div id="chat-window" class="hidden">
     <div id="chat-header">
-      <span id="chat-title">private chat</span>
+      <span id="chat-title">:* *:</span>
       <span id="chat-ttl"></span>
-      <button id="close-chat-btn">_</button>
+      <button id="close-chat-btn">x</button>
     </div>
-
-    <!-- Conversaciones -->
-    <div id="conversations-panel">
-      <div id="conversations-list"></div>
-      <div id="new-conversation">
-        <input type="email" id="new-partner-email" placeholder="other email">
-        <input type="password" id="new-secret" placeholder="shared secret">
-        <button id="start-conversation-btn">start</button>
-      </div>
-    </div>
-
-    <!-- Messages -->
-    <div id="messages-panel" class="hidden">
-      <div id="messages-header">
-        <button id="back-btn">←</button>
-        <span id="messages-partner"></span>
-      </div>
-      <div id="messages-list"></div>
-      <div id="message-input-area">
-        <input type="text" id="message-input" placeholder="type a message..." disabled>
-        <button id="send-btn" disabled>send</button>
-      </div>
-    </div>
-
-    <div id="chat-footer">
-      <span id="user-email-display"></span>
-      <button id="logout-btn">logout</button>
+    <div id="messages-list"></div>
+    <div id="message-input-area">
+      <input type="text" id="message-input" placeholder="..." disabled>
+      <button id="send-btn" disabled>send</button>
     </div>
   </div>
 
