@@ -1,5 +1,6 @@
 -- ============================================
 -- SCHEMA: Private E2EE Chat (2 usuarios)
+-- IDEMPOTENTE: se puede ejecutar mil veces sin error
  -- ============================================
  -- Ejecutar todo esto en el SQL Editor de Supabase
 
@@ -12,10 +13,12 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users can read own profile" ON profiles;
 CREATE POLICY "users can read own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "users can insert own profile" ON profiles;
 CREATE POLICY "users can insert own profile"
   ON profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
@@ -32,7 +35,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 
--- Puede ver la conversación el creador (user1_id) o el destinatario (su email)
+DROP POLICY IF EXISTS "users can read own conversations" ON conversations;
 CREATE POLICY "users can read own conversations"
   ON conversations FOR SELECT
   USING (
@@ -40,7 +43,7 @@ CREATE POLICY "users can read own conversations"
     OR auth.email() = user2_email
   );
 
--- Solo crear con tu propio ID
+DROP POLICY IF EXISTS "users can create conversations" ON conversations;
 CREATE POLICY "users can create conversations"
   ON conversations FOR INSERT
   WITH CHECK (auth.uid() = user1_id);
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users can read messages in their conversations" ON messages;
 CREATE POLICY "users can read messages in their conversations"
   ON messages FOR SELECT
   USING (
@@ -68,6 +72,7 @@ CREATE POLICY "users can read messages in their conversations"
     )
   );
 
+DROP POLICY IF EXISTS "users can send messages" ON messages;
 CREATE POLICY "users can send messages"
   ON messages FOR INSERT
   WITH CHECK (
@@ -83,8 +88,7 @@ CREATE POLICY "users can send messages"
 -- 4. Habilitar Realtime para messages
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
--- 5. Función de cleanup (opcional, corre en Supabase Dashboard > SQL > usa pg_cron)
--- Edge Function o Vercel Cron puede llamar a:
+-- 5. Función de cleanup
 CREATE OR REPLACE FUNCTION cleanup_expired()
 RETURNS void
 LANGUAGE plpgsql
@@ -99,9 +103,6 @@ BEGIN
 END;
 $$;
 
--- Para programar cada hora (requiere extension pg_cron habilitada):
--- SELECT cron.schedule('cleanup-chat', '0 * * * *', 'SELECT cleanup_expired();');
-
 -- 6. Trigger: auto-crear profile al registrarse
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS trigger
@@ -115,7 +116,8 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION handle_new_user();

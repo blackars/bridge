@@ -19,59 +19,96 @@ Solo el frontend puede ir en GitHub Pages. El backend debe vivir en otro lado.
 |------|----------|-------|
 | Frontend (HTML/CSS/JS vanilla) | **GitHub Pages** | Gratis |
 | DB + Realtime (WebSocket) | **Supabase Free Tier** | Gratis (500MB DB, 50k usuarios activos/mes) |
-| Autenticación | **Supabase Auth** | Gratis (email/password o magic link) |
+| Autenticación | **Supabase Auth** | Gratis (email/password) |
 | Encriptación E2EE | **Web Crypto API** (cliente) | Gratis |
-| Vida útil mensajes | Supabase Row Level Security + cleanup cron | Gratis |
+| Vida útil mensajes | RLS filter + cleanup function | Gratis |
 
 ---
 
-## Prompt completo para implementar
+## Prompt completo
 
 ```
 Crea un servicio de chat privado para 2 usuarios con:
 
 ## Stack
-- Frontend: HTML/CSS/JS vanilla (hyper-minimalista, una sola página, estilo ventana flotante tipo nube que se abre/cierra con un botón)
-- Backend: Supabase (Free Tier)
-  - Auth con Supabase Auth (email/password)
-  - Mensajería en tiempo real con Supabase Realtime (subscription a INSERT en la tabla messages)
-  - Row Level Security (RLS) para que cada usuario solo vea sus propias conversaciones
-- Encriptación: End-to-end con Web Crypto API (AES-GCM)
-  - Derivar clave compartida del chat usando un secreto común ingresado por ambos usuarios (PBKDF2)
-  - Encriptar cada mensaje en cliente antes de enviarlo a Supabase
-  - Desencriptar al recibirlo antes de mostrarlo
-- Hosting: GitHub Pages (frontend estático, sin backend propio)
+- Frontend: HTML/CSS/JS vanilla, burbuja flotante que se abre/cierra
+- Backend: Supabase Free Tier
+  - Auth: Supabase Auth (email/password)
+  - Realtime: Postgres Changes subscription a INSERT en messages
+  - RLS: cada usuario solo ve sus conversaciones
+- E2EE: Web Crypto API (AES-GCM + PBKDF2)
+  - Clave derivada de un secreto compartido ingresado por ambos
+  - Encriptar/desencriptar 100% en cliente
+- Hosting: GitHub Pages
 
 ## Funcionalidad
-1. Pantalla de login/registro (Supabase Auth con email/password)
-2. Sala de chat único para 2 usuarios específicos (identificados por email)
-3. Los mensajes viajan encriptados (E2EE) a la DB de Supabase — el servidor NUNCA ve el contenido
-4. Realtime: al enviar, el otro usuario recibe al instante vía Realtime subscriptions
-5. Diseño tipo "burbuja flotante" (chat widget) que se pueda abrir/cerrar con un botón, posicionado en la esquina inferior derecha de la pantalla
-6. Sin frameworks, sin dependencias npm, todo vanilla
-7. Sin servidor propio — todo el "backend" es Supabase
+1. Login/registro con Supabase Auth (email/password)
+2. Chat para 2 usuarios específicos
+3. Mensajes viajan encriptados — el servidor NUNCA ve texto plano
+4. Realtime: al enviar, el otro recibe al instante
+5. Burbuja flotante esquina inferior derecha
+6. Sin frameworks, vanilla JS
+7. Sin servidor propio — solo Supabase
 
-## Vida útil de la conversación: 24 horas
-- Cada sala de chat entre 2 usuarios tiene un TTL (time-to-live) de 24 horas
-- Al crear la sala, se guarda un `created_at` timestamp
-- Los mensajes con más de 24 horas se limpian automáticamente:
-  - Opción A: Una función serverless (Supabase Edge Function o cron) que corre cada hora eliminando mensajes expirados
-  - Opción B: Una consulta RLS que filtra mensajes con `created_at > NOW() - INTERVAL '24 hours'` y un cleanup periódico
-  - Opción C: Política de retention en la misma tabla con un trigger
-- La interfaz debe mostrar el tiempo restante de la conversación (countdown)
-- Al expirar, los mensajes se borran y la sala se cierra automáticamente
+## Vida útil: 24 horas
+- TTL de 24h por conversación
+- RLS filtra mensajes con created_at < 24h
+- Cleanup programable con cleanup_expired()
+- Countdown visible en UI
 
 ## Despliegue
-1. Crear proyecto en Supabase (gratis, sin tarjeta)
-2. Configurar Auth (email/password)
-3. Crear tablas: `profiles`, `conversations`, `messages` (con RLS policies)
-4. Habilitar Realtime en la tabla `messages`
-5. Configurar cleanup automático (Edge Function con pg_cron o Vercel Cron Job)
-6. Subir frontend estático a GitHub Pages
-7. Conectarlo a Supabase con publishable key y project URL
-
-Dame el código completo con instrucciones de deploy paso a paso.
+1. Crear proyecto en Supabase (gratis)
+2. SQL Editor: ejecutar supabase-schema.sql
+3. Settings (⚙️) > API Keys > Pestaña "Publishable and secret API keys"
+4. Copiar Project URL (Settings > API) y Publishable key a config.js
+5. Database > Replication > marcar messages en supabase_realtime
+6. GitHub Pages: push a main
 ```
+
+## Deploy paso a paso (detallado)
+
+### 1. Crear proyecto Supabase
+- https://supabase.com → New project → nombre "private-e2ee-chat" → Free
+
+### 2. Ejecutar schema SQL
+- SQL Editor → New query → pegar `supabase-schema.sql` completo → Run
+
+### 3. Copiar credenciales a config.js
+- **Project URL**: Settings (⚙️) > **API** → copiar "Project URL"
+  (ej: `https://bulybtgalshddzwtzhug.supabase.co`)
+- **Publishable key**: Settings (⚙️) > **API Keys** → pestaña "Publishable
+  and secret API keys" → Create new API keys (si no existe) → copiar
+  "Publishable key" (empieza con `sb_publishable_...`)
+- Pegar ambas en `config.js` (sin `/rest/v1/` al final de la URL)
+
+### 4. Crear los 2 usuarios (sin registro público)
+- Authentication > Settings > apagar **Enable sign up**
+- SQL Editor → abrir `reset-seed.sql` → reemplazar emails/passwords → Run
+- Verificar: `SELECT id, email FROM auth.users;`
+- Verificar: `SELECT id, email FROM profiles;`
+  (Si profiles está vacío, el trigger falló. Solución:
+  ```sql
+  INSERT INTO profiles (id, email)
+  SELECT id, email FROM auth.users;
+  ```)
+
+### 5. Habilitar Realtime
+- Database > Replication > marcar `messages` en `supabase_realtime`
+  (Ya se agrega automático en el SQL, pero verificar)
+
+### 6. Subir a GitHub Pages
+```bash
+git remote add origin https://github.com/TU_USER/private-e2ee-chat.git
+git branch -M main
+git push -u origin main
+```
+- GitHub repo > Settings > Pages > Branch: `main`, folder: `/ (root)` > Save
+
+### 7. Cambiar email/contraseña (cuando quieras)
+Abre `reset-seed.sql` — al final están las queries comentadas para:
+- UPDATE auth.users SET email = ...
+- UPDATE profiles SET email = ...
+- UPDATE auth.users SET encrypted_password = crypt(...) ...
 
 ---
 
