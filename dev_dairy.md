@@ -68,7 +68,7 @@ Crea un servicio de chat privado para 2 usuarios con:
 4. Habilitar Realtime en la tabla `messages`
 5. Configurar cleanup automático (Edge Function con pg_cron o Vercel Cron Job)
 6. Subir frontend estático a GitHub Pages
-7. Conectarlo a Supabase con anon key y project URL
+7. Conectarlo a Supabase con publishable key y project URL
 
 Dame el código completo con instrucciones de deploy paso a paso.
 ```
