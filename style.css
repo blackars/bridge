@@ -93,6 +93,7 @@ button:hover { background: var(--accent-hover); }
   display: flex;
   flex-direction: column;
   height: 100vh;
+  position: relative;
 }
 
 #chat-header {
@@ -153,6 +154,20 @@ button:hover { background: var(--accent-hover); }
 }
 
 #message-input { flex: 1; }
+
+#scroll-bottom-btn {
+  position: absolute;
+  right: 20px;
+  bottom: 78px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+  z-index: 10;
+}
 
 #typing-indicator {
   display: flex;

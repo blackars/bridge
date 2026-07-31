@@ -28,6 +28,7 @@ const sendBtn = $('send-btn');
 const chatTtl = $('chat-ttl');
 const chatError = $('chat-error');
 const typingIndicator = $('typing-indicator');
+const scrollBottomBtn = $('scroll-bottom-btn');
 
 // ============ AUTH ============
 authForm.addEventListener('submit', async (e) => {
@@ -151,7 +152,12 @@ function subscribeRealtime(convId) {
     .channel(`chat:${convId}`)
     .on('postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${convId}` },
-      async (payload) => { await renderMessage(payload.new); showTyping(false); scrollToBottom(); }
+      async (payload) => {
+        await renderMessage(payload.new);
+        showTyping(false);
+        if (isAtBottom()) scrollToBottom();
+        updateScrollBtn();
+      }
     )
     .subscribe();
 }
@@ -223,7 +229,7 @@ function showChatError(msg) {
 // ============ TYPING INDICATOR ============
 function subscribeTyping(convId) {
   if (_typingChannel) _typingChannel.unsubscribe();
-  _typingChannel = _sb.channel(`typing:${convId}`);
+  _typingChannel = _sb.channel(`typing:${convId}`, { config: { private: true } });
   _typingChannel
     .on('broadcast', { event: 'typing' }, ({ payload }) => {
       if (payload.userId === _user.id) return;
@@ -244,7 +250,7 @@ function sendTyping(typing) {
 
 function showTyping(visible) {
   typingIndicator.classList.toggle('hidden', !visible);
-  if (visible) scrollToBottom();
+  if (visible && isAtBottom()) scrollToBottom();
 }
 
 messageInput.addEventListener('input', () => {
@@ -313,4 +319,19 @@ async function decrypt(encryptedB64, ivB64) {
 
 function scrollToBottom() {
   messagesList.scrollTop = messagesList.scrollHeight;
+  updateScrollBtn();
 }
+
+// ============ SCROLL TO BOTTOM BUTTON ============
+function isAtBottom() {
+  return messagesList.scrollHeight - messagesList.scrollTop - messagesList.clientHeight < 80;
+}
+
+function updateScrollBtn() {
+  scrollBottomBtn.classList.toggle('hidden', isAtBottom());
+}
+
+messagesList.addEventListener('scroll', updateScrollBtn);
+scrollBottomBtn.addEventListener('click', () => {
+  messagesList.scrollTo({ top: messagesList.scrollHeight, behavior: 'smooth' });
+});
