@@ -1,5 +1,7 @@
 const { createClient } = supabase;
-const _sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const _sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: false }
+});
 
 let _user = null;
 let _currentConv = null;
@@ -7,6 +9,10 @@ let _secretKey = null;
 let _ttlInterval = null;
 let _realtimeChannel = null;
 let _renderedIds = new Set();
+let _sending = false;
+let _typingChannel = null;
+let _typingTimeout = null;
+let _typingSent = false;
 
 const $ = id => document.getElementById(id);
 const authScreen = $('auth-screen');
@@ -21,6 +27,7 @@ const messageInput = $('message-input');
 const sendBtn = $('send-btn');
 const chatTtl = $('chat-ttl');
 const chatError = $('chat-error');
+const typingIndicator = $('typing-indicator');
 
 // ============ AUTH ============
 authForm.addEventListener('submit', async (e) => {
@@ -85,6 +92,7 @@ async function initChat() {
 
   await loadMessages(conv.id);
   subscribeRealtime(conv.id);
+  subscribeTyping(conv.id);
 
   messageInput.disabled = false;
   sendBtn.disabled = false;
@@ -123,6 +131,7 @@ async function findOrCreateConv(partnerEmail) {
 
 async function loadMessages(convId) {
   messagesList.innerHTML = '';
+  messagesList.appendChild(typingIndicator);
   _renderedIds = new Set();
   const { data, error } = await _sb
     .from('messages')
@@ -142,7 +151,7 @@ function subscribeRealtime(convId) {
     .channel(`chat:${convId}`)
     .on('postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${convId}` },
-      async (payload) => { await renderMessage(payload.new); scrollToBottom(); }
+      async (payload) => { await renderMessage(payload.new); showTyping(false); scrollToBottom(); }
     )
     .subscribe();
 }
@@ -169,42 +178,84 @@ messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMes
 
 async function sendMessage() {
   const text = messageInput.value.trim();
-  if (!text) return;
-  if (!_currentConv || !_secretKey) {
-    try {
-      await initChat();
-    } catch (err) {
-      console.error(err);
-      showChatError(err.message);
+  if (!text || _sending) return;
+  _sending = true;
+  try {
+    if (!_currentConv || !_secretKey) {
+      try {
+        await initChat();
+      } catch (err) {
+        console.error(err);
+        showChatError(err.message);
+        return;
+      }
+    }
+    const { encrypted, iv } = await encrypt(text);
+    const { data: inserted, error } = await _sb
+      .from('messages')
+      .insert({
+        conversation_id: _currentConv.id,
+        sender_id: _user.id,
+        encrypted_content: encrypted,
+        iv
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error(error);
+      showChatError(error.message);
       return;
     }
+    chatError.classList.add('hidden');
+    messageInput.value = '';
+    await renderMessage(inserted);
+    scrollToBottom();
+  } finally {
+    _sending = false;
   }
-  const { encrypted, iv } = await encrypt(text);
-  const { data: inserted, error } = await _sb
-    .from('messages')
-    .insert({
-      conversation_id: _currentConv.id,
-      sender_id: _user.id,
-      encrypted_content: encrypted,
-      iv
-    })
-    .select()
-    .single();
-  if (error) {
-    console.error(error);
-    showChatError(error.message);
-    return;
-  }
-  chatError.classList.add('hidden');
-  messageInput.value = '';
-  await renderMessage(inserted);
-  scrollToBottom();
 }
 
 function showChatError(msg) {
   chatError.textContent = '✗ ' + msg;
   chatError.classList.remove('hidden');
 }
+
+// ============ TYPING INDICATOR ============
+function subscribeTyping(convId) {
+  if (_typingChannel) _typingChannel.unsubscribe();
+  _typingChannel = _sb.channel(`typing:${convId}`);
+  _typingChannel
+    .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      if (payload.userId === _user.id) return;
+      showTyping(!!payload.typing);
+    })
+    .subscribe();
+}
+
+function sendTyping(typing) {
+  if (!_typingChannel || _typingSent === typing) return;
+  _typingSent = typing;
+  _typingChannel.send({
+    type: 'broadcast',
+    event: 'typing',
+    payload: { typing, userId: _user.id }
+  });
+}
+
+function showTyping(visible) {
+  typingIndicator.classList.toggle('hidden', !visible);
+  if (visible) scrollToBottom();
+}
+
+messageInput.addEventListener('input', () => {
+  sendTyping(true);
+  clearTimeout(_typingTimeout);
+  _typingTimeout = setTimeout(() => sendTyping(false), 1500);
+});
+messageInput.addEventListener('blur', () => {
+  clearTimeout(_typingTimeout);
+  sendTyping(false);
+});
 
 // ============ TTL ============
 function updateTtl(expiresAt) {
@@ -222,6 +273,11 @@ function cleanup() {
   messageInput.disabled = true;
   sendBtn.disabled = true;
   if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
+  clearTimeout(_typingTimeout);
+  _typingTimeout = null;
+  _typingSent = false;
+  if (_typingChannel) { _typingChannel.unsubscribe(); _typingChannel = null; }
+  showTyping(false);
   clearInterval(_ttlInterval);
   _ttlInterval = null;
 }

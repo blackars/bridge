@@ -28,7 +28,11 @@
       <button id="close-chat-btn">x</button>
     </div>
     <p id="chat-error" class="error hidden"></p>
-    <div id="messages-list"></div>
+    <div id="messages-list">
+      <div id="typing-indicator" class="msg other hidden">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
     <div id="message-input-area">
       <input type="text" id="message-input" placeholder="..." disabled>
       <button id="send-btn" disabled>↵</button>
