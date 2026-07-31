@@ -81,7 +81,6 @@ CREATE POLICY "users can send messages"
       SELECT 1 FROM conversations c
       WHERE c.id = conversation_id
         AND (c.user1_id = auth.uid() OR c.user2_email = auth.email())
-        AND c.expires_at > NOW()
     )
   );
 

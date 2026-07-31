@@ -6,6 +6,7 @@ let _currentConv = null;
 let _secretKey = null;
 let _ttlInterval = null;
 let _realtimeChannel = null;
+let _renderedIds = new Set();
 
 const $ = id => document.getElementById(id);
 const authScreen = $('auth-screen');
@@ -122,6 +123,7 @@ async function findOrCreateConv(partnerEmail) {
 
 async function loadMessages(convId) {
   messagesList.innerHTML = '';
+  _renderedIds = new Set();
   const { data, error } = await _sb
     .from('messages')
     .select('*')
@@ -146,6 +148,8 @@ function subscribeRealtime(convId) {
 }
 
 async function renderMessage(msg) {
+  if (msg.id && _renderedIds.has(msg.id)) return;
+  if (msg.id) _renderedIds.add(msg.id);
   const div = document.createElement('div');
   div.className = `msg ${msg.sender_id === _user.id ? 'own' : 'other'}`;
   try {
@@ -165,16 +169,41 @@ messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMes
 
 async function sendMessage() {
   const text = messageInput.value.trim();
-  if (!text || !_currentConv || !_secretKey) return;
+  if (!text) return;
+  if (!_currentConv || !_secretKey) {
+    try {
+      await initChat();
+    } catch (err) {
+      console.error(err);
+      showChatError(err.message);
+      return;
+    }
+  }
   const { encrypted, iv } = await encrypt(text);
-  const { error } = await _sb.from('messages').insert({
-    conversation_id: _currentConv.id,
-    sender_id: _user.id,
-    encrypted_content: encrypted,
-    iv
-  });
-  if (error) { console.error(error); return; }
+  const { data: inserted, error } = await _sb
+    .from('messages')
+    .insert({
+      conversation_id: _currentConv.id,
+      sender_id: _user.id,
+      encrypted_content: encrypted,
+      iv
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error(error);
+    showChatError(error.message);
+    return;
+  }
+  chatError.classList.add('hidden');
   messageInput.value = '';
+  await renderMessage(inserted);
+  scrollToBottom();
+}
+
+function showChatError(msg) {
+  chatError.textContent = '✗ ' + msg;
+  chatError.classList.remove('hidden');
 }
 
 // ============ TTL ============
