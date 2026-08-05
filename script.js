@@ -13,6 +13,10 @@ let _sending = false;
 let _typingChannel = null;
 let _typingTimeout = null;
 let _typingSent = false;
+let _reconnectTimers = {};
+let _reconnectAttempts = 0;
+let _healthInterval = null;
+let _lastMsgAt = null;
 
 const $ = id => document.getElementById(id);
 const authScreen = $('auth-screen');
@@ -29,6 +33,7 @@ const chatTtl = $('chat-ttl');
 const chatError = $('chat-error');
 const typingIndicator = $('typing-indicator');
 const scrollBottomBtn = $('scroll-bottom-btn');
+const rtStatusDot = $('rt-status');
 
 // ============ AUTH ============
 authForm.addEventListener('submit', async (e) => {
@@ -94,6 +99,7 @@ async function initChat() {
   await loadMessages(conv.id);
   subscribeRealtime(conv.id);
   subscribeTyping(conv.id);
+  startHealthCheck();
 
   messageInput.disabled = false;
   sendBtn.disabled = false;
@@ -134,6 +140,7 @@ async function loadMessages(convId) {
   messagesList.innerHTML = '';
   messagesList.appendChild(typingIndicator);
   _renderedIds = new Set();
+  _lastMsgAt = null;
   const { data, error } = await _sb
     .from('messages')
     .select('*')
@@ -147,6 +154,8 @@ async function loadMessages(convId) {
 }
 
 function subscribeRealtime(convId) {
+  clearTimeout(_reconnectTimers.chat);
+  _reconnectTimers.chat = null;
   if (_realtimeChannel) _realtimeChannel.unsubscribe();
   _realtimeChannel = _sb
     .channel(`chat:${convId}`)
@@ -159,12 +168,85 @@ function subscribeRealtime(convId) {
         updateScrollBtn();
       }
     )
-    .subscribe();
+    .subscribe((status, err) => handleChannelStatus('chat', status, err));
+}
+
+function handleChannelStatus(kind, status, err) {
+  if (status === 'SUBSCRIBED') {
+    _reconnectAttempts = 0;
+    if (kind === 'chat') {
+      setRtStatus('connected');
+      catchUpMessages(_currentConv && _currentConv.id);
+    }
+    return;
+  }
+  if (status === 'CHANNEL_ERROR' || status === 'SUBSCRIBE_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+    console.warn(`[realtime:${kind}]`, status, err && err.message);
+    if (!_user || !_currentConv) return;
+    if (kind === 'chat') setRtStatus('reconnecting');
+    const delay = 1000 * Math.pow(2, Math.min(_reconnectAttempts, 3));
+    _reconnectAttempts++;
+    clearTimeout(_reconnectTimers[kind]);
+    _reconnectTimers[kind] = setTimeout(async () => {
+      _reconnectTimers[kind] = null;
+      if (!_user || !_currentConv) return;
+      await refreshSessionIfNeeded();
+      if (kind === 'chat') subscribeRealtime(_currentConv.id);
+      else subscribeTyping(_currentConv.id);
+    }, delay);
+  }
+}
+
+async function refreshSessionIfNeeded() {
+  try {
+    const { data: { session } } = await _sb.auth.getSession();
+    if (!session || Date.now() / 1000 >= session.expires_at - 60) {
+      await _sb.auth.refreshSession();
+    }
+  } catch (err) {
+    console.warn('[realtime] refresh failed', err);
+  }
+}
+
+async function catchUpMessages(convId) {
+  if (!convId || !_lastMsgAt) return;
+  const { data, error } = await _sb
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', convId)
+    .gte('created_at', _lastMsgAt.toISOString())
+    .order('created_at', { ascending: true });
+  if (error || !data || data.length === 0) return;
+  for (const msg of data) await renderMessage(msg);
+  if (isAtBottom()) scrollToBottom();
+  updateScrollBtn();
+}
+
+function setRtStatus(state) {
+  if (!rtStatusDot) return;
+  rtStatusDot.className = `rt-status ${state}`;
+  rtStatusDot.title = state === 'connected' ? 'conectado'
+    : state === 'reconnecting' ? 'reconectando…' : 'sin conexión';
+}
+
+function startHealthCheck() {
+  clearInterval(_healthInterval);
+  _healthInterval = setInterval(() => {
+    if (!_user || !_currentConv) return;
+    const chatOk = _realtimeChannel && _realtimeChannel.state === 'joined';
+    const typingOk = _typingChannel && _typingChannel.state === 'joined';
+    if (!chatOk) subscribeRealtime(_currentConv.id);
+    if (!typingOk) subscribeTyping(_currentConv.id);
+  }, 30000);
 }
 
 async function renderMessage(msg) {
   if (msg.id && _renderedIds.has(msg.id)) return;
   if (msg.id) _renderedIds.add(msg.id);
+  if (msg.created_at) {
+    const t = new Date(msg.created_at);
+    if (!_lastMsgAt || t > _lastMsgAt) _lastMsgAt = t;
+  }
   const div = document.createElement('div');
   div.className = `msg ${msg.sender_id === _user.id ? 'own' : 'other'}`;
   try {
@@ -228,6 +310,8 @@ function showChatError(msg) {
 
 // ============ TYPING INDICATOR ============
 function subscribeTyping(convId) {
+  clearTimeout(_reconnectTimers.typing);
+  _reconnectTimers.typing = null;
   if (_typingChannel) _typingChannel.unsubscribe();
   _typingChannel = _sb.channel(`typing:${convId}`, { config: { private: true } });
   _typingChannel
@@ -235,7 +319,7 @@ function subscribeTyping(convId) {
       if (payload.userId === _user.id) return;
       showTyping(!!payload.typing);
     })
-    .subscribe();
+    .subscribe((status, err) => handleChannelStatus('typing', status, err));
 }
 
 function sendTyping(typing) {
@@ -286,7 +370,31 @@ function cleanup() {
   showTyping(false);
   clearInterval(_ttlInterval);
   _ttlInterval = null;
+  clearInterval(_healthInterval);
+  _healthInterval = null;
+  clearTimeout(_reconnectTimers.chat);
+  clearTimeout(_reconnectTimers.typing);
+  _reconnectTimers = {};
+  _reconnectAttempts = 0;
+  _lastMsgAt = null;
+  setRtStatus('offline');
 }
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !_user || !_currentConv) return;
+  await refreshSessionIfNeeded();
+  const chatOk = _realtimeChannel && _realtimeChannel.state === 'joined';
+  const typingOk = _typingChannel && _typingChannel.state === 'joined';
+  if (!chatOk) subscribeRealtime(_currentConv.id);
+  if (!typingOk) subscribeTyping(_currentConv.id);
+  await catchUpMessages(_currentConv.id);
+});
+
+window.addEventListener('online', () => {
+  if (!_user || !_currentConv) return;
+  subscribeRealtime(_currentConv.id);
+  subscribeTyping(_currentConv.id);
+});
 
 // ============ E2EE ============
 async function deriveKey(secret, salt) {

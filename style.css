@@ -107,6 +107,17 @@ button:hover { background: var(--accent-hover); }
 
 #chat-ttl { font-size: 11px; color: var(--muted); font-weight: 400; }
 
+#rt-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+#rt-status.connected { background: #22c55e; }
+#rt-status.reconnecting { background: #f59e0b; animation: rt-blink 1s infinite ease-in-out; }
+#rt-status.offline { background: var(--danger); }
+@keyframes rt-blink { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
 #close-chat-btn {
   background: none;
   color: var(--muted);
